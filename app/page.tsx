@@ -1,3 +1,5 @@
+"use client" // Add this line at the top
+
 import dynamic from 'next/dynamic'
 
 // Dynamically import the converter with SSR disabled
