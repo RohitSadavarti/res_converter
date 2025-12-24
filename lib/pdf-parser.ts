@@ -1,6 +1,7 @@
 import * as pdfjsLib from "pdfjs-dist"
 
 if (typeof window !== "undefined") {
+  const version = pdfjsLib.version;
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.4.394/build/pdf.worker.min.mjs`
 }
 
