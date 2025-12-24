@@ -173,18 +173,7 @@ export function PdfConverter() {
               </CardContent>
             </Card>
 
-            {/* Raw Text Debug */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Raw Extracted Text</CardTitle>
-                <CardDescription>First 2000 characters of extracted text for debugging</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <pre className="bg-muted p-4 rounded-lg text-xs overflow-auto max-h-64 whitespace-pre-wrap">
-                  {rawText.substring(0, 2000)}
-                </pre>
-              </CardContent>
-            </Card>
+
           </>
         )}
       </div>
