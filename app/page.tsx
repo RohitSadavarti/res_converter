@@ -1,4 +1,10 @@
-import { PdfConverter } from "@/components/pdf-converter"
+import dynamic from 'next/dynamic'
+
+// Dynamically import the converter with SSR disabled
+const PdfConverter = dynamic(
+  () => import("@/components/pdf-converter").then((mod) => mod.PdfConverter),
+  { ssr: false }
+)
 
 export default function Home() {
   return (
