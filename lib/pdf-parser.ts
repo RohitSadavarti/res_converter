@@ -1,10 +1,9 @@
 import * as pdfjsLib from "pdfjs-dist"
 
 if (typeof window !== "undefined") {
-  const version = pdfjsLib.version;
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.4.394/build/pdf.worker.min.mjs`
+  // Use the version exported by the library itself to keep them in sync
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
 }
-
 export interface CourseRecord {
   theory: string
   grade1: string
