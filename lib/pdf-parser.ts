@@ -1,9 +1,9 @@
 import * as pdfjsLib from "pdfjs-dist"
 
 if (typeof window !== "undefined") {
-  // Use the version exported by the library itself to keep them in sync
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.4.394/build/pdf.worker.min.mjs`
 }
+
 export interface CourseRecord {
   theory: string
   grade1: string
@@ -209,73 +209,95 @@ function parseStudentFromBlock(block: string): StudentRecord | null {
 function extractCoursesFromTokens(tokens: string[]): CourseRecord[] {
   const courses: CourseRecord[] = []
 
-  // Each course has 9 tokens in sequence:
-  // THEORY GRADE1 INTERNAL GRADE2 TOTAL CREDITS GRADE GP C*GP
-  // Examples:
-  // "32+ D$ 16+ A$ 48 3 C 5 15"
-  // "33E D 18+ A+$ 51 3 B 6 18"
-  // "15F F 14+ B+$ -- ---- -- -- --"
-  // "A F A -- -- ---- -- -- --" (absent)
+  // Each course typically has this pattern, but may vary:
+  // THEORY(mark) GRADE INTERNAL(mark) GRADE TOTAL CREDITS GRADE GP C*GP
+  // But the spacing and format varies significantly in the actual PDF data
 
-  // Token patterns:
-  // THEORY: digits with optional E/F/+/$ OR "A" for absent
-  // GRADE1: single letter with optional +/$
-  // INTERNAL: digits with optional +/$ OR "A" for absent
-  // GRADE2: single letter with optional +/$
-  // TOTAL: digits OR "--"
-  // CREDITS: digit OR "----"
-  // GRADE: single letter OR "--"
-  // GP: digit(s) OR "--"
-  // C*GP: digit(s) OR "--"
+  // New strategy: Look for sequences that match the credit pattern (single digit followed by grade info)
+  // Credits are typically 2-10, followed by grade letter, then grade points
 
-  const isMarkToken = (t: string) => /^(\d{1,3}[EF+$]*|A)$/i.test(t)
-  const isGradeToken = (t: string) => /^([A-Z][+$]*|F|--)$/i.test(t)
-  const isNumOrDash = (t: string) => /^(\d+|--|----|-)$/.test(t)
+  const isTheoryMark = (t: string) => /^(\d{1,2}[EF+$@]*|A)$/i.test(t)
+  const isInternalMark = (t: string) => /^(\d{1,2}[+$@]*|A)$/i.test(t)
+  const isGrade = (t: string) => /^([A-Z][+$]*|F|O|--)$/i.test(t)
+  const isTotal = (t: string) => /^(\d{2,3}|--|-|AB)$/i.test(t)
+  const isCredits = (t: string) => /^(\d{1,2}|----|--)$/i.test(t) && Number.parseInt(t) >= 1 && Number.parseInt(t) <= 10
+  const isGP = (t: string) => /^(\d{1,2}|--|-)$/i.test(t)
+  const isCGP = (t: string) => /^(\d{1,3}|--|-)$/i.test(t)
 
   let i = 0
-  while (i < tokens.length && courses.length < MAX_COURSES) {
-    // Try to match a 9-token course sequence starting at position i
-    if (i + 8 < tokens.length) {
-      const t0 = tokens[i] // THEORY
-      const t1 = tokens[i + 1] // GRADE1
-      const t2 = tokens[i + 2] // INTERNAL
-      const t3 = tokens[i + 3] // GRADE2
-      const t4 = tokens[i + 4] // TOTAL
-      const t5 = tokens[i + 5] // CREDITS
-      const t6 = tokens[i + 6] // GRADE
-      const t7 = tokens[i + 7] // GP
-      const t8 = tokens[i + 8] // C*GP
+  let attemptCount = 0
+  const maxAttempts = tokens.length * 2 // Prevent infinite loops
 
-      // Check if this looks like a valid course sequence
-      const isValidSequence =
-        isMarkToken(t0) &&
-        isGradeToken(t1) &&
-        (isMarkToken(t2) || t2 === "--" || t2 === "A") &&
-        isGradeToken(t3) &&
-        isNumOrDash(t4) &&
-        isNumOrDash(t5) &&
-        (isGradeToken(t6) || isNumOrDash(t6)) &&
-        isNumOrDash(t7) &&
-        isNumOrDash(t8)
+  while (i < tokens.length - 8 && courses.length < MAX_COURSES && attemptCount < maxAttempts) {
+    attemptCount++
 
-      if (isValidSequence) {
+    // Look for a pattern that starts with a theory mark
+    if (!isTheoryMark(tokens[i])) {
+      i++
+      continue
+    }
+
+    // Try to match the full 9-field sequence
+    const candidate = tokens.slice(i, i + 9)
+
+    // Validate the sequence more flexibly
+    const looksLikeCourse =
+      isTheoryMark(candidate[0]) &&
+      isGrade(candidate[1]) &&
+      isInternalMark(candidate[2]) &&
+      isGrade(candidate[3]) &&
+      isTotal(candidate[4]) &&
+      isCredits(candidate[5]) &&
+      isGrade(candidate[6]) &&
+      isGP(candidate[7]) &&
+      isCGP(candidate[8])
+
+    if (looksLikeCourse) {
+      courses.push({
+        theory: candidate[0],
+        grade1: candidate[1],
+        internal: candidate[2],
+        grade2: candidate[3],
+        total: candidate[4],
+        credits: candidate[5],
+        grade: candidate[6],
+        gradePoints: candidate[7],
+        creditGradeProduct: candidate[8],
+      })
+      i += 9
+      continue
+    }
+
+    // Alternative pattern: Sometimes data is compressed differently
+    // Try pattern with embedded numbers: THEORY INTERNAL TOTAL CREDITS GRADE GP CGP
+    // (skipping intermediate grades)
+    if (i + 6 < tokens.length) {
+      const alt = tokens.slice(i, i + 7)
+      if (
+        isTheoryMark(alt[0]) &&
+        isInternalMark(alt[1]) &&
+        isTotal(alt[2]) &&
+        isCredits(alt[3]) &&
+        isGrade(alt[4]) &&
+        isGP(alt[5]) &&
+        isCGP(alt[6])
+      ) {
         courses.push({
-          theory: t0,
-          grade1: t1,
-          internal: t2,
-          grade2: t3,
-          total: t4,
-          credits: t5,
-          grade: t6,
-          gradePoints: t7,
-          creditGradeProduct: t8,
+          theory: alt[0],
+          grade1: "",
+          internal: alt[1],
+          grade2: "",
+          total: alt[2],
+          credits: alt[3],
+          grade: alt[4],
+          gradePoints: alt[5],
+          creditGradeProduct: alt[6],
         })
-        i += 9 // Move to next course
+        i += 7
         continue
       }
     }
 
-    // If no valid sequence found, try next position
     i++
   }
 
