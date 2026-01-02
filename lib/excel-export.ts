@@ -5,7 +5,6 @@ export function exportToExcel(students: StudentRecord[], subjectNames: string[],
   const rows = students.map((student) => buildRow(student, subjectNames.length))
 
   const csvContent = [headers.join(","), ...rows.map((row) => row.map((cell) => escapeCSV(cell)).join(","))].join("\n")
-
   const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
@@ -19,48 +18,20 @@ export function exportToExcel(students: StudentRecord[], subjectNames: string[],
 
 function buildHeaders(subjectNames: string[]): string[] {
   const headers = ["SeatNo", "LastName", "FirstName", "MiddleName", "MothersName", "ABC_ID", "Summary"]
-
-  // Replace generic "Course1" with actual subject name from PDF
-  subjectNames.forEach((name, index) => {
-    const cleanName = name.replace(/[:\s-]/g, "_")
-    headers.push(
-      `${cleanName}_THEORY`,
-      `${cleanName}_INTERNAL`,
-      `${cleanName}_TOTAL`,
-      `${cleanName}_CREDITS`,
-      `${cleanName}_GRADE`,
-      `${cleanName}_GP`,
-      `${cleanName}_C*GP`
-    )
+  subjectNames.forEach((name) => {
+    // Clean name for header: only single underscore between words
+    const cleanName = name.replace(/[:\s-]+/g, "_").replace(/^_|_$/g, "");
+    headers.push(`${cleanName}_THEORY`, `${cleanName}_INTERNAL`, `${cleanName}_TOTAL`)
   })
-
   return headers
 }
 
 function buildRow(student: StudentRecord, subjectCount: number): string[] {
-  const row = [
-    student.seatNo,
-    student.lastName,
-    student.firstName,
-    student.middleName,
-    student.mothersName,
-    student.abcId,
-    student.summary,
-  ]
-
+  const row = [student.seatNo, student.lastName, student.firstName, student.middleName, student.mothersName, student.abcId, student.summary]
   for (let i = 0; i < subjectCount; i++) {
-    const course = student.courses[i] || { theory: "", internal: "", total: "", credits: "", grade: "", gradePoints: "", creditGradeProduct: "" }
-    row.push(
-      course.theory,
-      course.internal,
-      course.total,
-      course.credits,
-      course.grade,
-      course.gradePoints,
-      course.creditGradeProduct
-    )
+    const course = student.courses[i] || { theory: "", internal: "", total: "" };
+    row.push(course.theory, course.internal, course.total)
   }
-
   return row
 }
 
